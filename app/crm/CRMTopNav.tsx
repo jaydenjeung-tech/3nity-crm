@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 function navButtonStyle(active = false): React.CSSProperties {
   return {
@@ -23,6 +24,14 @@ function navButtonStyle(active = false): React.CSSProperties {
 
 export default function CRMTopNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   const panelStyle: React.CSSProperties = {
     background: "#ffffff",
@@ -57,28 +66,55 @@ export default function CRMTopNav() {
     flexWrap: "nowrap",
   };
 
+  const headerRow: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+  };
+
+  const logoutButton: React.CSSProperties = {
+    border: "1px solid #fecaca",
+    background: "#fef2f2",
+    color: "#b91c1c",
+    padding: "8px 14px",
+    borderRadius: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+
   const isCRM = pathname === "/crm";
   const isLeads = pathname === "/crm/leads";
   const isNewLead = pathname === "/crm/leads/new";
 
   return (
     <section style={panelStyle}>
-      <h1 style={titleStyle}>CRM</h1>
-      <p style={descStyle}>
-        Patient lead management, follow-ups, and front desk workflow.
-      </p>
+      <div style={headerRow}>
+        <div>
+          <h1 style={titleStyle}>CRM</h1>
+          <p style={descStyle}>
+            Patient lead management, follow-ups, and front desk workflow.
+          </p>
+        </div>
+
+        <button onClick={handleLogout} style={logoutButton}>
+          Logout
+        </button>
+      </div>
 
       <div style={{ marginTop: 20 }}>
         <div style={navWrapStyle}>
           <Link href="/dashboard" style={navButtonStyle(false)}>
             Dashboard
           </Link>
+
           <Link href="/crm" style={navButtonStyle(isCRM)}>
             CRM
           </Link>
+
           <Link href="/crm/leads" style={navButtonStyle(isLeads)}>
             Leads
           </Link>
+
           <Link href="/crm/leads/new" style={navButtonStyle(isNewLead)}>
             New Lead
           </Link>
