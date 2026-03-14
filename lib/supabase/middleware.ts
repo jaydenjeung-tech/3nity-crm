@@ -31,8 +31,37 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // 세션 갱신
-  await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  const isAuthPage = pathname === "/login";
+  const isRootPage = pathname === "/";
+  const isProtectedPage =
+    pathname.startsWith("/crm") ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/inventory") ||
+    pathname.startsWith("/tray");
+
+  if (isRootPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/crm" : "/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (!user && isProtectedPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/crm";
+    return NextResponse.redirect(url);
+  }
 
   return response;
 }

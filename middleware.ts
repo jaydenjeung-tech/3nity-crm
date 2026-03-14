@@ -6,8 +6,8 @@ const PROTECTED_PATHS = [
   "/dashboard",
   "/crm",
   "/inventory",
-  "/crm/leads",
   "/patients",
+  "/tray",
 ];
 
 function isProtectedPath(pathname: string) {
@@ -22,12 +22,7 @@ export async function middleware(request: NextRequest) {
   // 먼저 세션 동기화
   const response = await updateSession(request);
 
-  // 보호 라우트 아니면 그대로 통과
-  if (!isProtectedPath(pathname)) {
-    return response;
-  }
-
-  // 로그인 체크
+  // 유저 확인
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -37,7 +32,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll() {
-          // middleware 여기서는 직접 세팅 안 함
+          // 여기서는 직접 세팅 안 함
         },
       },
     }
@@ -47,7 +42,22 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  // 루트 접속 처리
+  if (pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = user ? "/crm" : "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // 로그인 페이지는 로그인된 사용자가 오면 CRM으로 보냄
+  if (pathname === "/login" && user) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/crm";
+    return NextResponse.redirect(url);
+  }
+
+  // 보호 라우트인데 로그인 안 된 경우
+  if (isProtectedPath(pathname) && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
 
@@ -64,10 +74,12 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
+    "/login",
     "/dashboard/:path*",
     "/crm/:path*",
     "/inventory/:path*",
-    "/crm/leads/:path*",
     "/patients/:path*",
+    "/tray/:path*",
   ],
 };

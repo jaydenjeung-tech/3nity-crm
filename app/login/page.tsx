@@ -61,8 +61,8 @@ export default async function LoginPage({ searchParams }: PageProps) {
           <Image
             src="/logo.png"
             alt="Clinic Logo"
-            width={80}
-            height={80}
+            width={150}
+            height={150}
             priority
           />
         </div>
