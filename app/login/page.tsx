@@ -1,4 +1,5 @@
 import { signInAction } from "./actions";
+import Image from "next/image";
 
 type SearchParams =
   | Promise<Record<string, string | string[] | undefined>>
@@ -44,6 +45,7 @@ export default async function LoginPage({ searchParams }: PageProps) {
           boxShadow: "0 18px 50px rgba(15, 23, 42, 0.08)",
         }}
       >
+       
         <div style={{ marginBottom: 20 }}>
           <div
             style={{
@@ -55,6 +57,15 @@ export default async function LoginPage({ searchParams }: PageProps) {
               marginBottom: 8,
             }}
           >
+          <div className="flex justify-center mb-6">
+          <Image
+            src="/logo.png"
+            alt="Clinic Logo"
+            width={80}
+            height={80}
+            priority
+          />
+        </div>
             Staff Portal
           </div>
 
