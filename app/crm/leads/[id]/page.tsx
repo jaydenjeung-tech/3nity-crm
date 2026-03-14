@@ -24,6 +24,16 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "Inactive" },
 ] as const;
 
+const ACTIVITY_TYPE_OPTIONS = [
+  { value: "note", label: "Note" },
+  { value: "call", label: "Call" },
+  { value: "text", label: "Text" },
+  { value: "email", label: "Email" },
+  { value: "consult", label: "Consult" },
+  { value: "status_change", label: "Status Change" },
+  { value: "follow_up", label: "Follow-up" },
+] as const;
+
 type LeadStatus = (typeof STATUS_OPTIONS)[number]["value"];
 
 type LeadRow = {
@@ -52,6 +62,22 @@ type StaffRow = {
   role: string | null;
 };
 
+type ActivityRow = {
+  id: string;
+  clinic_id: string;
+  lead_id: string;
+  activity_type: string;
+  body: string | null;
+  created_by: string | null;
+  created_at: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  clinic_id: string | null;
+  full_name: string | null;
+};
+
 function asString(v: FormDataEntryValue | null) {
   return String(v ?? "").trim();
 }
@@ -60,12 +86,7 @@ function normalizeParamId(value: string | string[] | undefined) {
   if (!value) return null;
   const raw = Array.isArray(value) ? value[0] : value;
   const id = String(raw ?? "").trim();
-
-  if (!id) return null;
-  if (id === "new") return null;
-  if (id === "undefined") return null;
-  if (id === "null") return null;
-
+  if (!id || id === "new" || id === "undefined" || id === "null") return null;
   return id;
 }
 
@@ -117,83 +138,28 @@ function getStatusBadgeStyle(status: LeadStatus | null): CSSProperties {
 
   switch (status) {
     case "new_lead":
-      return {
-        ...base,
-        background: "#eff6ff",
-        color: "#1d4ed8",
-        borderColor: "#bfdbfe",
-      };
+      return { ...base, background: "#eff6ff", color: "#1d4ed8", borderColor: "#bfdbfe" };
     case "attempted_contact":
-      return {
-        ...base,
-        background: "#fff7ed",
-        color: "#c2410c",
-        borderColor: "#fed7aa",
-      };
+      return { ...base, background: "#fff7ed", color: "#c2410c", borderColor: "#fed7aa" };
     case "contacted":
-      return {
-        ...base,
-        background: "#ecfeff",
-        color: "#0f766e",
-        borderColor: "#a5f3fc",
-      };
+      return { ...base, background: "#ecfeff", color: "#0f766e", borderColor: "#a5f3fc" };
     case "consult_scheduled":
-      return {
-        ...base,
-        background: "#f5f3ff",
-        color: "#6d28d9",
-        borderColor: "#ddd6fe",
-      };
+      return { ...base, background: "#f5f3ff", color: "#6d28d9", borderColor: "#ddd6fe" };
     case "consult_completed":
-      return {
-        ...base,
-        background: "#eef2ff",
-        color: "#4338ca",
-        borderColor: "#c7d2fe",
-      };
+      return { ...base, background: "#eef2ff", color: "#4338ca", borderColor: "#c7d2fe" };
     case "treatment_plan_presented":
-      return {
-        ...base,
-        background: "#fefce8",
-        color: "#a16207",
-        borderColor: "#fde68a",
-      };
+      return { ...base, background: "#fefce8", color: "#a16207", borderColor: "#fde68a" };
     case "followup_needed":
-      return {
-        ...base,
-        background: "#fff7ed",
-        color: "#9a3412",
-        borderColor: "#fdba74",
-      };
+      return { ...base, background: "#fff7ed", color: "#9a3412", borderColor: "#fdba74" };
     case "accepted":
-      return {
-        ...base,
-        background: "#ecfdf5",
-        color: "#047857",
-        borderColor: "#a7f3d0",
-      };
+      return { ...base, background: "#ecfdf5", color: "#047857", borderColor: "#a7f3d0" };
     case "converted":
-      return {
-        ...base,
-        background: "#f0fdf4",
-        color: "#15803d",
-        borderColor: "#bbf7d0",
-      };
+      return { ...base, background: "#f0fdf4", color: "#15803d", borderColor: "#bbf7d0" };
     case "lost":
     case "inactive":
-      return {
-        ...base,
-        background: "#f8fafc",
-        color: "#475569",
-        borderColor: "#cbd5e1",
-      };
+      return { ...base, background: "#f8fafc", color: "#475569", borderColor: "#cbd5e1" };
     default:
-      return {
-        ...base,
-        background: "#f8fafc",
-        color: "#334155",
-        borderColor: "#cbd5e1",
-      };
+      return { ...base, background: "#f8fafc", color: "#334155", borderColor: "#cbd5e1" };
   }
 }
 
@@ -201,6 +167,23 @@ async function updateLead(formData: FormData) {
   "use server";
 
   const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) throw new Error("You must be logged in.");
+
+  const { data: myProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("clinic_id, full_name")
+    .eq("id", user.id)
+    .single<ProfileRow>();
+
+  if (profileError) throw new Error(profileError.message);
+
+  const myClinicId = myProfile?.clinic_id ?? null;
+  if (!myClinicId) throw new Error("Missing clinic access.");
 
   const id = asString(formData.get("id"));
   const full_name = asString(formData.get("full_name"));
@@ -219,19 +202,32 @@ async function updateLead(formData: FormData) {
   if (!isUuid(id)) throw new Error("Invalid lead ID.");
   if (!full_name) throw new Error("Full name is required.");
 
+  const { data: existingLead, error: existingLeadError } = await supabase
+    .from("leads")
+    .select("id, clinic_id, status")
+    .eq("id", id)
+    .eq("clinic_id", myClinicId)
+    .single<{ id: string; clinic_id: string; status: LeadStatus | null }>();
+
+  if (existingLeadError || !existingLead) {
+    throw new Error("Lead not found or not accessible.");
+  }
+
   const safeStatus: LeadStatus = isLeadStatus(rawStatus) ? rawStatus : "new_lead";
 
-  const last_contacted_at = last_contacted_at_raw
-    ? new Date(last_contacted_at_raw).toISOString()
-    : null;
+  const last_contacted_at =
+    last_contacted_at_raw && !Number.isNaN(new Date(last_contacted_at_raw).getTime())
+      ? new Date(last_contacted_at_raw).toISOString()
+      : null;
 
-  const next_follow_up_at = next_follow_up_at_raw
-    ? new Date(next_follow_up_at_raw).toISOString()
-    : null;
+  const next_follow_up_at =
+    next_follow_up_at_raw && !Number.isNaN(new Date(next_follow_up_at_raw).getTime())
+      ? new Date(next_follow_up_at_raw).toISOString()
+      : null;
 
   const is_active = is_active_raw === "true";
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("leads")
     .update({
       full_name,
@@ -247,10 +243,28 @@ async function updateLead(formData: FormData) {
       is_active,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("clinic_id", myClinicId)
+    .select("id");
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(`Lead update failed: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error("No lead was updated.");
+  }
+
+  if (existingLead.status !== safeStatus) {
+    await supabase.from("lead_activities").insert({
+      clinic_id: myClinicId,
+      lead_id: id,
+      activity_type: "status_change",
+      body: `Status changed from ${getStatusLabel(existingLead.status)} to ${getStatusLabel(
+        safeStatus
+      )}`,
+      created_by: user.id,
+    });
   }
 
   revalidatePath("/crm");
@@ -259,17 +273,8 @@ async function updateLead(formData: FormData) {
   redirect(`/crm/leads/${id}`);
 }
 
-export default async function LeadDetailPage(props: PageProps) {
-  const params = await props.params;
-  const leadId = normalizeParamId(params?.id);
-
-  if (!leadId) {
-    notFound();
-  }
-
-  if (!isUuid(leadId)) {
-    notFound();
-  }
+async function addLeadActivity(formData: FormData) {
+  "use server";
 
   const supabase = await createSupabaseServerClient();
 
@@ -277,21 +282,75 @@ export default async function LeadDetailPage(props: PageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
+  if (!user) throw new Error("You must be logged in.");
+
+  const { data: myProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("clinic_id")
+    .eq("id", user.id)
+    .single<ProfileRow>();
+
+  if (profileError) throw new Error(profileError.message);
+
+  const myClinicId = myProfile?.clinic_id ?? null;
+  if (!myClinicId) throw new Error("Missing clinic access.");
+
+  const lead_id = asString(formData.get("lead_id"));
+  const activity_type = asString(formData.get("activity_type")) || "note";
+  const body = asString(formData.get("body"));
+
+  if (!lead_id || !isUuid(lead_id)) throw new Error("Invalid lead id.");
+  if (!body) throw new Error("Activity note is required.");
+
+  const { data: leadCheck, error: leadCheckError } = await supabase
+    .from("leads")
+    .select("id, clinic_id")
+    .eq("id", lead_id)
+    .eq("clinic_id", myClinicId)
+    .single();
+
+  if (leadCheckError || !leadCheck) {
+    throw new Error("Lead not found or not accessible.");
   }
+
+  const { error } = await supabase.from("lead_activities").insert({
+    clinic_id: myClinicId,
+    lead_id,
+    activity_type,
+    body,
+    created_by: user.id,
+  });
+
+  if (error) {
+    throw new Error(`Activity insert failed: ${error.message}`);
+  }
+
+  revalidatePath(`/crm/leads/${lead_id}`);
+  redirect(`/crm/leads/${lead_id}`);
+}
+
+export default async function LeadDetailPage(props: PageProps) {
+  const params = await props.params;
+  const leadId = normalizeParamId(params?.id);
+
+  if (!leadId || !isUuid(leadId)) notFound();
+
+  const supabase = await createSupabaseServerClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
 
   const { data: myProfile } = await supabase
     .from("profiles")
     .select("clinic_id")
     .eq("id", user.id)
-    .single();
+    .single<ProfileRow>();
 
   const myClinicId = myProfile?.clinic_id ?? null;
-
-  if (!myClinicId) {
-    redirect("/dashboard");
-  }
+  if (!myClinicId) redirect("/dashboard");
 
   const { data: lead, error: leadError } = await supabase
     .from("leads")
@@ -318,15 +377,28 @@ export default async function LeadDetailPage(props: PageProps) {
     .eq("clinic_id", myClinicId)
     .single<LeadRow>();
 
-  if (leadError || !lead) {
-    notFound();
-  }
+  if (leadError || !lead) notFound();
 
   const { data: staff } = await supabase
     .from("profiles")
     .select("id, full_name, role")
     .eq("clinic_id", myClinicId)
     .order("full_name", { ascending: true });
+
+  const { data: activitiesData } = await supabase
+    .from("lead_activities")
+    .select("id, clinic_id, lead_id, activity_type, body, created_by, created_at")
+    .eq("lead_id", leadId)
+    .eq("clinic_id", myClinicId)
+    .order("created_at", { ascending: false });
+
+  const staffRows = (staff ?? []) as StaffRow[];
+  const activities = (activitiesData ?? []) as ActivityRow[];
+
+  const staffMap = new Map<string, string>();
+  for (const member of staffRows) {
+    staffMap.set(member.id, member.full_name || member.role || member.id);
+  }
 
   const pageStyle: CSSProperties = {
     minHeight: "100vh",
@@ -336,8 +408,10 @@ export default async function LeadDetailPage(props: PageProps) {
 
   const wrapStyle: CSSProperties = {
     width: "100%",
-    maxWidth: 920,
+    maxWidth: 1200,
     margin: "0 auto",
+    display: "grid",
+    gap: 18,
   };
 
   const topBarStyle: CSSProperties = {
@@ -345,36 +419,36 @@ export default async function LeadDetailPage(props: PageProps) {
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12,
-    marginBottom: 16,
     flexWrap: "wrap",
   };
 
   const linkStyle: CSSProperties = {
     textDecoration: "none",
     color: "#0f172a",
-    fontWeight: 600,
+    fontWeight: 700,
     fontSize: 14,
   };
 
   const cardStyle: CSSProperties = {
     background: "#ffffff",
     border: "1px solid #e2e8f0",
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 20,
+    padding: 20,
     boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
   };
 
-  const sectionStyle: CSSProperties = {
-    display: "grid",
-    gap: 14,
-    marginTop: 18,
+  const sectionTitleStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 900,
+    color: "#0f172a",
   };
 
   const titleStyle: CSSProperties = {
     margin: 0,
-    fontSize: 28,
+    fontSize: 30,
     lineHeight: 1.15,
-    fontWeight: 800,
+    fontWeight: 900,
     color: "#0f172a",
   };
 
@@ -388,8 +462,8 @@ export default async function LeadDetailPage(props: PageProps) {
 
   const grid2Style: CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: 14,
+    gridTemplateColumns: "1.15fr 0.85fr",
+    gap: 18,
   };
 
   const fieldStyle: CSSProperties = {
@@ -397,9 +471,16 @@ export default async function LeadDetailPage(props: PageProps) {
     gap: 8,
   };
 
+  const formGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: 14,
+    marginTop: 16,
+  };
+
   const labelStyle: CSSProperties = {
     fontSize: 14,
-    fontWeight: 700,
+    fontWeight: 800,
     color: "#0f172a",
   };
 
@@ -410,7 +491,7 @@ export default async function LeadDetailPage(props: PageProps) {
     borderRadius: 12,
     border: "1px solid #cbd5e1",
     background: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     color: "#0f172a",
   };
 
@@ -422,15 +503,16 @@ export default async function LeadDetailPage(props: PageProps) {
 
   const infoGridStyle: CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+    marginTop: 16,
   };
 
   const infoBoxStyle: CSSProperties = {
     background: "#f8fafc",
     border: "1px solid #e2e8f0",
     borderRadius: 14,
-    padding: "12px 14px",
+    padding: "10px 12px",
   };
 
   const infoLabelStyle: CSSProperties = {
@@ -438,13 +520,13 @@ export default async function LeadDetailPage(props: PageProps) {
     fontWeight: 700,
     color: "#64748b",
     textTransform: "uppercase",
-    letterSpacing: 0.4,
-    marginBottom: 6,
+    letterSpacing: 0.35,
+    marginBottom: 5,
   };
 
   const infoValueStyle: CSSProperties = {
-    fontSize: 15,
-    fontWeight: 600,
+    fontSize: 14,
+    fontWeight: 700,
     color: "#0f172a",
     wordBreak: "break-word",
   };
@@ -453,7 +535,7 @@ export default async function LeadDetailPage(props: PageProps) {
     display: "flex",
     flexWrap: "wrap",
     gap: 10,
-    marginTop: 10,
+    marginTop: 16,
   };
 
   const primaryBtnStyle: CSSProperties = {
@@ -464,7 +546,7 @@ export default async function LeadDetailPage(props: PageProps) {
     color: "#fff",
     padding: "12px 16px",
     fontSize: 15,
-    fontWeight: 700,
+    fontWeight: 800,
     cursor: "pointer",
   };
 
@@ -479,15 +561,47 @@ export default async function LeadDetailPage(props: PageProps) {
     color: "#0f172a",
     padding: "12px 16px",
     fontSize: 15,
-    fontWeight: 700,
+    fontWeight: 800,
   };
+
+  const timelineStyle: CSSProperties = {
+    display: "grid",
+    gap: 12,
+    marginTop: 16,
+  };
+
+  const timelineCardStyle: CSSProperties = {
+    border: "1px solid #e2e8f0",
+    borderRadius: 16,
+    padding: 14,
+    background: "#fff",
+  };
+
+  const smallMutedStyle: CSSProperties = {
+    color: "#64748b",
+    fontSize: 13,
+    lineHeight: 1.5,
+  };
+
+  const activityBadgeStyle = (type: string): CSSProperties => ({
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 800,
+    border: "1px solid #cbd5e1",
+    background: "#f8fafc",
+    color: "#334155",
+    textTransform: "capitalize",
+  });
 
   return (
     <div style={pageStyle}>
       <div style={wrapStyle}>
         <div style={topBarStyle}>
           <Link href="/crm/leads" style={linkStyle}>
-            ← Back to Leads
+            ← Back to CRM
           </Link>
 
           {lead.phone ? (
@@ -505,7 +619,7 @@ export default async function LeadDetailPage(props: PageProps) {
               {getStatusLabel(lead.status)}
             </span>
 
-            {!lead.is_active ? (
+            {lead.is_active === false ? (
               <span
                 style={{
                   display: "inline-flex",
@@ -524,264 +638,318 @@ export default async function LeadDetailPage(props: PageProps) {
             ) : null}
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <div style={infoGridStyle}>
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Phone</div>
-                <div style={infoValueStyle}>{lead.phone || "-"}</div>
-              </div>
+          <div style={infoGridStyle}>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Phone</div>
+              <div style={infoValueStyle}>{lead.phone || "-"}</div>
+            </div>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Email</div>
+              <div style={infoValueStyle}>{lead.email || "-"}</div>
+            </div>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Source</div>
+              <div style={infoValueStyle}>{lead.source || "-"}</div>
+            </div>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Treatment Interest</div>
+              <div style={infoValueStyle}>{lead.treatment_interest || "-"}</div>
+            </div>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Created</div>
+              <div style={infoValueStyle}>{formatDateTime(lead.created_at)}</div>
+            </div>
+            <div style={infoBoxStyle}>
+              <div style={infoLabelStyle}>Updated</div>
+              <div style={infoValueStyle}>{formatDateTime(lead.updated_at)}</div>
+            </div>
+          </div>
+        </div>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Email</div>
-                <div style={infoValueStyle}>{lead.email || "-"}</div>
-              </div>
+        <div style={grid2Style}>
+          <div style={{ display: "grid", gap: 18 }}>
+            <div style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Edit Lead</h2>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Source</div>
-                <div style={infoValueStyle}>{lead.source || "-"}</div>
-              </div>
+              <form action={updateLead}>
+                <input type="hidden" name="id" value={lead.id} />
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Treatment Interest</div>
-                <div style={infoValueStyle}>{lead.treatment_interest || "-"}</div>
-              </div>
+                <div style={formGridStyle}>
+                  <div style={fieldStyle}>
+                    <label htmlFor="full_name" style={labelStyle}>
+                      Full Name *
+                    </label>
+                    <input
+                      id="full_name"
+                      name="full_name"
+                      defaultValue={lead.full_name ?? ""}
+                      required
+                      style={inputStyle}
+                    />
+                  </div>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Created</div>
-                <div style={infoValueStyle}>{formatDateTime(lead.created_at)}</div>
-              </div>
+                  <div style={fieldStyle}>
+                    <label htmlFor="phone" style={labelStyle}>
+                      Phone
+                    </label>
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      defaultValue={lead.phone ?? ""}
+                      style={inputStyle}
+                    />
+                  </div>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Updated</div>
-                <div style={infoValueStyle}>{formatDateTime(lead.updated_at)}</div>
-              </div>
+                  <div style={fieldStyle}>
+                    <label htmlFor="email" style={labelStyle}>
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      defaultValue={lead.email ?? ""}
+                      style={inputStyle}
+                    />
+                  </div>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Last Contact</div>
-                <div style={infoValueStyle}>
-                  {formatDateTime(lead.last_contacted_at)}
+                  <div style={fieldStyle}>
+                    <label htmlFor="source" style={labelStyle}>
+                      Source
+                    </label>
+                    <input
+                      id="source"
+                      name="source"
+                      defaultValue={lead.source ?? ""}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="treatment_interest" style={labelStyle}>
+                      Treatment Interest
+                    </label>
+                    <select
+                      id="treatment_interest"
+                      name="treatment_interest"
+                      defaultValue={lead.treatment_interest ?? ""}
+                      style={inputStyle}
+                    >
+                      <option value="">Select treatment</option>
+                      <option value="implant">Implant</option>
+                      <option value="crown">Crown</option>
+                      <option value="veneer">Veneer</option>
+                      <option value="ortho">Ortho</option>
+                      <option value="denture">Denture</option>
+                      <option value="whitening">Whitening</option>
+                      <option value="retainer">Retainer</option>
+                      <option value="night_guard">Night Guard</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="status" style={labelStyle}>
+                      Status
+                    </label>
+                    <select
+                      id="status"
+                      name="status"
+                      defaultValue={lead.status ?? "new_lead"}
+                      style={inputStyle}
+                    >
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="assigned_to" style={labelStyle}>
+                      Assigned To
+                    </label>
+                    <select
+                      id="assigned_to"
+                      name="assigned_to"
+                      defaultValue={lead.assigned_to ?? ""}
+                      style={inputStyle}
+                    >
+                      <option value="">Unassigned</option>
+                      {staffRows.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.full_name || member.role || member.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="is_active" style={labelStyle}>
+                      Active
+                    </label>
+                    <select
+                      id="is_active"
+                      name="is_active"
+                      defaultValue={lead.is_active === false ? "false" : "true"}
+                      style={inputStyle}
+                    >
+                      <option value="true">Active</option>
+                      <option value="false">Inactive</option>
+                    </select>
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="last_contacted_at" style={labelStyle}>
+                      Last Contacted At
+                    </label>
+                    <input
+                      id="last_contacted_at"
+                      name="last_contacted_at"
+                      type="datetime-local"
+                      defaultValue={toDateTimeLocalInput(lead.last_contacted_at)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <label htmlFor="next_follow_up_at" style={labelStyle}>
+                      Next Follow-up At
+                    </label>
+                    <input
+                      id="next_follow_up_at"
+                      name="next_follow_up_at"
+                      type="datetime-local"
+                      defaultValue={toDateTimeLocalInput(lead.next_follow_up_at)}
+                      style={inputStyle}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div style={infoBoxStyle}>
-                <div style={infoLabelStyle}>Next Follow-up</div>
-                <div style={infoValueStyle}>
-                  {formatDateTime(lead.next_follow_up_at)}
+                <div style={{ ...fieldStyle, marginTop: 14 }}>
+                  <label htmlFor="notes" style={labelStyle}>
+                    Current Lead Notes
+                  </label>
+                  <textarea
+                    id="notes"
+                    name="notes"
+                    defaultValue={lead.notes ?? ""}
+                    rows={7}
+                    style={textAreaStyle}
+                    placeholder="Summary notes for the current lead record..."
+                  />
                 </div>
-              </div>
+
+                <div style={actionsStyle}>
+                  <button type="submit" style={primaryBtnStyle}>
+                    Save Changes
+                  </button>
+
+                  <Link href="/crm/leads" style={secondaryBtnStyle}>
+                    Back to CRM
+                  </Link>
+                </div>
+              </form>
             </div>
           </div>
 
-          <form action={updateLead} style={sectionStyle}>
-            <input type="hidden" name="id" value={lead.id} />
+          <div style={{ display: "grid", gap: 18 }}>
+            <div style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Add Activity</h2>
 
-            <div style={{ marginTop: 6 }}>
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "#0f172a",
-                }}
-              >
-                Edit Lead
-              </h2>
+              <form action={addLeadActivity} style={{ marginTop: 16 }}>
+                <input type="hidden" name="lead_id" value={lead.id} />
+
+                <div style={fieldStyle}>
+                  <label htmlFor="activity_type" style={labelStyle}>
+                    Activity Type
+                  </label>
+                  <select
+                    id="activity_type"
+                    name="activity_type"
+                    defaultValue="note"
+                    style={inputStyle}
+                  >
+                    {ACTIVITY_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ ...fieldStyle, marginTop: 14 }}>
+                  <label htmlFor="body" style={labelStyle}>
+                    Activity Note
+                  </label>
+                  <textarea
+                    id="body"
+                    name="body"
+                    rows={6}
+                    required
+                    style={textAreaStyle}
+                    placeholder="Example: Called patient, discussed implant consult, asked to call back next Tuesday..."
+                  />
+                </div>
+
+                <div style={actionsStyle}>
+                  <button type="submit" style={primaryBtnStyle}>
+                    Add Activity
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <div style={grid2Style}>
-              <div style={fieldStyle}>
-                <label htmlFor="full_name" style={labelStyle}>
-                  Full Name *
-                </label>
-                <input
-                  id="full_name"
-                  name="full_name"
-                  defaultValue={lead.full_name ?? ""}
-                  required
-                  style={inputStyle}
-                />
-              </div>
+            <div style={cardStyle}>
+              <h2 style={sectionTitleStyle}>Activity Timeline</h2>
 
-              <div style={fieldStyle}>
-                <label htmlFor="phone" style={labelStyle}>
-                  Phone
-                </label>
-                <input
-                  id="phone"
-                  name="phone"
-                  type="tel"
-                  inputMode="tel"
-                  defaultValue={lead.phone ?? ""}
-                  style={inputStyle}
-                />
-              </div>
+              <div style={timelineStyle}>
+                {activities.length === 0 ? (
+                  <div style={smallMutedStyle}>No activities yet.</div>
+                ) : (
+                  activities.map((item) => (
+                    <div key={item.id} style={timelineCardStyle}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={activityBadgeStyle(item.activity_type)}>
+                          {item.activity_type.replaceAll("_", " ")}
+                        </span>
 
-              <div style={fieldStyle}>
-                <label htmlFor="email" style={labelStyle}>
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  inputMode="email"
-                  defaultValue={lead.email ?? ""}
-                  style={inputStyle}
-                />
-              </div>
+                        <span style={smallMutedStyle}>
+                          {formatDateTime(item.created_at)}
+                        </span>
+                      </div>
 
-              <div style={fieldStyle}>
-                <label htmlFor="source" style={labelStyle}>
-                  Source
-                </label>
-                <input
-                  id="source"
-                  name="source"
-                  defaultValue={lead.source ?? ""}
-                  placeholder="Website, Yelp, Walk-in, Referral..."
-                  style={inputStyle}
-                />
-              </div>
+                      <div
+                        style={{
+                          marginTop: 10,
+                          color: "#0f172a",
+                          fontSize: 14,
+                          lineHeight: 1.6,
+                          whiteSpace: "pre-wrap",
+                        }}
+                      >
+                        {item.body || "-"}
+                      </div>
 
-              <div style={fieldStyle}>
-                <label htmlFor="treatment_interest" style={labelStyle}>
-                  Treatment Interest
-                </label>
-                <select
-                  id="treatment_interest"
-                  name="treatment_interest"
-                  defaultValue={lead.treatment_interest ?? ""}
-                  style={inputStyle}
-                >
-                  <option value="">Select treatment</option>
-                  <option value="implant">Implant</option>
-                  <option value="crown">Crown</option>
-                  <option value="veneer">Veneer</option>
-                  <option value="ortho">Ortho</option>
-                  <option value="denture">Denture</option>
-                  <option value="whitening">Whitening</option>
-                  <option value="retainer">Retainer</option>
-                  <option value="night_guard">Night Guard</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-
-              <div style={fieldStyle}>
-                <label htmlFor="status" style={labelStyle}>
-                  Status
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={lead.status ?? "new_lead"}
-                  style={inputStyle}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={fieldStyle}>
-                <label htmlFor="assigned_to" style={labelStyle}>
-                  Assigned To
-                </label>
-                <select
-                  id="assigned_to"
-                  name="assigned_to"
-                  defaultValue={lead.assigned_to ?? ""}
-                  style={inputStyle}
-                >
-                  <option value="">Unassigned</option>
-                  {(staff ?? []).map((member: StaffRow) => (
-                    <option key={member.id} value={member.id}>
-                      {member.full_name || member.role || member.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={fieldStyle}>
-                <label htmlFor="is_active" style={labelStyle}>
-                  Active
-                </label>
-                <select
-                  id="is_active"
-                  name="is_active"
-                  defaultValue={lead.is_active === false ? "false" : "true"}
-                  style={inputStyle}
-                >
-                  <option value="true">Active</option>
-                  <option value="false">Inactive</option>
-                </select>
-              </div>
-
-              <div style={fieldStyle}>
-                <label htmlFor="last_contacted_at" style={labelStyle}>
-                  Last Contacted At
-                </label>
-                <input
-                  id="last_contacted_at"
-                  name="last_contacted_at"
-                  type="datetime-local"
-                  defaultValue={toDateTimeLocalInput(lead.last_contacted_at)}
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={fieldStyle}>
-                <label htmlFor="next_follow_up_at" style={labelStyle}>
-                  Next Follow-up At
-                </label>
-                <input
-                  id="next_follow_up_at"
-                  name="next_follow_up_at"
-                  type="datetime-local"
-                  defaultValue={toDateTimeLocalInput(lead.next_follow_up_at)}
-                  style={inputStyle}
-                />
+                      <div style={{ ...smallMutedStyle, marginTop: 10 }}>
+                        By: {item.created_by ? staffMap.get(item.created_by) || item.created_by : "-"}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-
-            <div style={fieldStyle}>
-              <label htmlFor="notes" style={labelStyle}>
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                defaultValue={lead.notes ?? ""}
-                rows={8}
-                style={textAreaStyle}
-                placeholder="Add follow-up notes, consult summary, treatment discussion, patient concerns..."
-              />
-            </div>
-
-            <div style={actionsStyle}>
-              <button type="submit" style={primaryBtnStyle}>
-                Save Changes
-              </button>
-
-              <Link href="/crm/leads" style={secondaryBtnStyle}>
-                Back to Leads
-              </Link>
-
-              <button
-                type="button"
-                disabled
-                title="Enable after patients table is ready"
-                style={{
-                  ...secondaryBtnStyle,
-                  opacity: 0.55,
-                  cursor: "not-allowed",
-                }}
-              >
-                Convert to Patient
-              </button>
-            </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

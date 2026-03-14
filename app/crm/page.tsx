@@ -1,236 +1,238 @@
-// app/crm/page.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+
+type LeadStatus =
+  | "new_lead"
+  | "attempted_contact"
+  | "contacted"
+  | "consult_scheduled"
+  | "consult_completed"
+  | "treatment_plan_presented"
+  | "followup_needed"
+  | "accepted"
+  | "converted"
+  | "lost"
+  | "inactive"
+  | string
+  | null;
 
 type LeadRow = {
   id: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
+  source: string | null;
   treatment_interest: string | null;
+  status: LeadStatus;
+  notes: string | null;
+  assigned_to: string | null;
+  last_contacted_at: string | null;
+  next_follow_up_at: string | null;
+  is_active: boolean | null;
   created_at: string | null;
-  status: string | null;
+  updated_at: string | null;
 };
 
-type TaskRow = {
+type ProfileRow = {
   id: string;
-  due_at: string | null;
-  status: string | null;
+  full_name: string | null;
+  clinic_id: string | null;
 };
-
-type PipelineKey =
-  | "new"
-  | "contacted"
-  | "consult_scheduled"
-  | "treatment_plan_sent"
-  | "accepted"
-  | "completed"
-  | "lost";
-
-type PipelineColumnDef = {
-  key: PipelineKey;
-  label: string;
-  tone:
-    | "slate"
-    | "blue"
-    | "amber"
-    | "violet"
-    | "emerald"
-    | "green"
-    | "rose";
-};
-
-const PIPELINE_COLUMNS: PipelineColumnDef[] = [
-  { key: "new", label: "New", tone: "slate" },
-  { key: "contacted", label: "Contacted", tone: "blue" },
-  { key: "consult_scheduled", label: "Consult Scheduled", tone: "amber" },
-  { key: "treatment_plan_sent", label: "Treatment Plan", tone: "violet" },
-  { key: "accepted", label: "Accepted", tone: "emerald" },
-  { key: "completed", label: "Completed", tone: "green" },
-  { key: "lost", label: "Lost", tone: "rose" },
-];
 
 function startOfTodayLocal() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-function normalizeLeadStatus(value: string | null): PipelineKey {
-  const status = String(value ?? "").trim().toLowerCase();
-
-  if (
-    ["new", "new_lead", "lead", "inquiry", "open"].includes(status)
-  ) {
-    return "new";
-  }
-
-  if (
-    ["contacted", "called", "follow_up", "follow-up"].includes(status)
-  ) {
-    return "contacted";
-  }
-
-  if (
-    ["consult", "consult_scheduled", "consultation", "scheduled"].includes(
-      status
-    )
-  ) {
-    return "consult_scheduled";
-  }
-
-  if (
-    ["treatment_plan", "treatment_plan_sent", "plan_sent", "proposal_sent"].includes(
-      status
-    )
-  ) {
-    return "treatment_plan_sent";
-  }
-
-  if (
-    ["accepted", "won", "converted"].includes(status)
-  ) {
-    return "accepted";
-  }
-
-  if (
-    ["completed", "closed"].includes(status)
-  ) {
-    return "completed";
-  }
-
-  if (
-    ["lost", "cancelled", "canceled", "no_show", "rejected"].includes(status)
-  ) {
-    return "lost";
-  }
-
-  return "new";
+function endOfTodayLocal() {
+  const start = startOfTodayLocal();
+  return new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
 }
 
-function normalizeTaskStatus(value: string | null) {
-  return String(value ?? "").trim().toLowerCase();
+function addDays(base: Date, days: number) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
-function formatDate(value: string | null) {
-  if (!value) return "";
+function parseDate(value: string | null) {
+  if (!value) return null;
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isClosedStatus(status: LeadStatus) {
+  return status === "converted" || status === "lost" || status === "inactive";
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleString();
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleDateString();
 }
 
-function getToneClasses(
-  tone: PipelineColumnDef["tone"],
-  kind: "header" | "badge" | "card"
-) {
-  const map = {
-    slate: {
-      header: "text-slate-800",
-      badge: "bg-slate-100 text-slate-700",
-      card: "border-slate-200 bg-slate-50/60",
-    },
-    blue: {
-      header: "text-blue-800",
-      badge: "bg-blue-100 text-blue-700",
-      card: "border-blue-200 bg-blue-50/60",
-    },
-    amber: {
-      header: "text-amber-800",
-      badge: "bg-amber-100 text-amber-700",
-      card: "border-amber-200 bg-amber-50/60",
-    },
-    violet: {
-      header: "text-violet-800",
-      badge: "bg-violet-100 text-violet-700",
-      card: "border-violet-200 bg-violet-50/60",
-    },
-    emerald: {
-      header: "text-emerald-800",
-      badge: "bg-emerald-100 text-emerald-700",
-      card: "border-emerald-200 bg-emerald-50/60",
-    },
-    green: {
-      header: "text-green-800",
-      badge: "bg-green-100 text-green-700",
-      card: "border-green-200 bg-green-50/60",
-    },
-    rose: {
-      header: "text-rose-800",
-      badge: "bg-rose-100 text-rose-700",
-      card: "border-rose-200 bg-rose-50/60",
-    },
+function getStatusLabel(status: LeadStatus) {
+  switch (status) {
+    case "new_lead":
+      return "New Lead";
+    case "attempted_contact":
+      return "Attempted Contact";
+    case "contacted":
+      return "Contacted";
+    case "consult_scheduled":
+      return "Consult Scheduled";
+    case "consult_completed":
+      return "Consult Completed";
+    case "treatment_plan_presented":
+      return "Treatment Plan Presented";
+    case "followup_needed":
+      return "Follow-up Needed";
+    case "accepted":
+      return "Accepted";
+    case "converted":
+      return "Converted";
+    case "lost":
+      return "Lost";
+    case "inactive":
+      return "Inactive";
+    default:
+      return status ? String(status) : "-";
+  }
+}
+
+function getStatusTone(status: LeadStatus): CSSProperties {
+  const base: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "6px 10px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 700,
+    border: "1px solid",
+    whiteSpace: "nowrap",
   };
 
-  return map[tone][kind];
+  switch (status) {
+    case "new_lead":
+      return {
+        ...base,
+        background: "#eff6ff",
+        color: "#1d4ed8",
+        borderColor: "#bfdbfe",
+      };
+    case "attempted_contact":
+    case "followup_needed":
+      return {
+        ...base,
+        background: "#fff7ed",
+        color: "#c2410c",
+        borderColor: "#fdba74",
+      };
+    case "contacted":
+      return {
+        ...base,
+        background: "#ecfeff",
+        color: "#0f766e",
+        borderColor: "#a5f3fc",
+      };
+    case "consult_scheduled":
+      return {
+        ...base,
+        background: "#f5f3ff",
+        color: "#6d28d9",
+        borderColor: "#ddd6fe",
+      };
+    case "consult_completed":
+      return {
+        ...base,
+        background: "#eef2ff",
+        color: "#4338ca",
+        borderColor: "#c7d2fe",
+      };
+    case "treatment_plan_presented":
+      return {
+        ...base,
+        background: "#fefce8",
+        color: "#a16207",
+        borderColor: "#fde68a",
+      };
+    case "accepted":
+    case "converted":
+      return {
+        ...base,
+        background: "#ecfdf5",
+        color: "#047857",
+        borderColor: "#a7f3d0",
+      };
+    case "lost":
+    case "inactive":
+      return {
+        ...base,
+        background: "#f8fafc",
+        color: "#475569",
+        borderColor: "#cbd5e1",
+      };
+    default:
+      return {
+        ...base,
+        background: "#f8fafc",
+        color: "#334155",
+        borderColor: "#cbd5e1",
+      };
+  }
 }
 
-function StatCard({
-  label,
-  value,
-  subtext,
-}: {
-  label: string;
-  value: number;
-  subtext?: string;
-}) {
-  return (
-    <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="text-sm font-medium text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-        {value}
-      </div>
-      {subtext ? (
-        <div className="mt-2 text-sm text-slate-500">{subtext}</div>
-      ) : null}
-    </div>
-  );
+function byNewest(a: LeadRow, b: LeadRow) {
+  const ad = parseDate(a.created_at)?.getTime() ?? 0;
+  const bd = parseDate(b.created_at)?.getTime() ?? 0;
+  return bd - ad;
 }
 
-function LeadMiniCard({ lead }: { lead: LeadRow }) {
-  return (
-    <Link
-      href={`/crm/leads/${lead.id}`}
-      className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="line-clamp-1 text-sm font-bold text-slate-900">
-        {lead.full_name?.trim() || "Unnamed Lead"}
-      </div>
-
-      {lead.treatment_interest ? (
-        <div className="mt-2 line-clamp-2 text-sm text-slate-600">
-          {lead.treatment_interest}
-        </div>
-      ) : null}
-
-      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-        <span className="truncate">{lead.phone || "-"}</span>
-        <span>{formatDate(lead.created_at) || "-"}</span>
-      </div>
-    </Link>
-  );
+function byUpcomingFollowUp(a: LeadRow, b: LeadRow) {
+  const ad = parseDate(a.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  const bd = parseDate(b.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  return ad - bd;
 }
 
-function ActionCard({
-  title,
-  description,
-  href,
-}: {
-  title: string;
-  description: string;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="block rounded-[28px] border border-slate-200 bg-white p-8 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="text-[20px] font-extrabold tracking-tight text-[#0d2a66]">
-        {title}
-      </div>
-      <p className="mt-5 text-[18px] leading-9 text-slate-600">{description}</p>
-    </Link>
-  );
+function byConsultDate(a: LeadRow, b: LeadRow) {
+  const ad = parseDate(a.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  const bd = parseDate(b.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  return ad - bd;
+}
+
+function getPriorityRank(lead: LeadRow, todayStart: Date, todayEnd: Date) {
+  if (isClosedStatus(lead.status)) return 999;
+
+  const followUp = parseDate(lead.next_follow_up_at);
+
+  if (followUp && followUp < todayStart) return 1; // overdue
+  if (followUp && followUp >= todayStart && followUp <= todayEnd) return 2; // today
+  if (!lead.assigned_to) return 3; // unassigned
+  if (lead.status === "new_lead") return 4;
+  if (lead.status === "treatment_plan_presented" || lead.status === "followup_needed")
+    return 5;
+
+  return 50;
 }
 
 export default async function CRMPage() {
@@ -240,169 +242,597 @@ export default async function CRMPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const [{ data: leads }, { data: tasks }] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("id, full_name, phone, treatment_interest, created_at, status")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("tasks")
-      .select("id, due_at, status")
-      .order("due_at", { ascending: true }),
-  ]);
-
-  const leadRows = (leads ?? []) as LeadRow[];
-  const taskRows = (tasks ?? []) as TaskRow[];
-
-  const today = startOfTodayLocal();
-
-  const openTasks = taskRows.filter((task) => {
-    const status = normalizeTaskStatus(task.status);
-    return !["done", "completed", "cancelled", "canceled"].includes(status);
-  }).length;
-
-  const overdueTasks = taskRows.filter((task) => {
-    const status = normalizeTaskStatus(task.status);
-    if (["done", "completed", "cancelled", "canceled"].includes(status)) {
-      return false;
-    }
-    if (!task.due_at) return false;
-    return new Date(task.due_at) < today;
-  }).length;
-
-  const pipelineMap: Record<PipelineKey, LeadRow[]> = {
-    new: [],
-    contacted: [],
-    consult_scheduled: [],
-    treatment_plan_sent: [],
-    accepted: [],
-    completed: [],
-    lost: [],
-  };
-
-  for (const lead of leadRows) {
-    const key = normalizeLeadStatus(lead.status);
-    pipelineMap[key].push(lead);
+  if (!user) {
+    redirect("/login");
   }
 
-  const activePipelineCount =
-    pipelineMap.new.length +
-    pipelineMap.contacted.length +
-    pipelineMap.consult_scheduled.length +
-    pipelineMap.treatment_plan_sent.length +
-    pipelineMap.accepted.length;
+  const { data: myProfile } = await supabase
+    .from("profiles")
+    .select("id, full_name, clinic_id")
+    .eq("id", user.id)
+    .single<ProfileRow>();
+
+  const myClinicId = myProfile?.clinic_id ?? null;
+
+  if (!myClinicId) {
+    redirect("/dashboard");
+  }
+
+  const { data: leadsData, error: leadsError } = await supabase
+    .from("leads")
+    .select(
+      `
+      id,
+      full_name,
+      phone,
+      email,
+      source,
+      treatment_interest,
+      status,
+      notes,
+      assigned_to,
+      last_contacted_at,
+      next_follow_up_at,
+      is_active,
+      created_at,
+      updated_at
+    `
+    )
+    .eq("clinic_id", myClinicId)
+    .order("created_at", { ascending: false });
+
+  if (leadsError) {
+    throw new Error(leadsError.message);
+  }
+
+  const leads = (leadsData ?? []) as LeadRow[];
+
+  const todayStart = startOfTodayLocal();
+  const todayEnd = endOfTodayLocal();
+  const weekEnd = addDays(todayEnd, 7);
+  const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+
+  const activeLeads = leads.filter((lead) => lead.is_active !== false);
+  const openLeads = activeLeads.filter((lead) => !isClosedStatus(lead.status));
+
+  const followUpsToday = openLeads.filter((lead) => {
+    const d = parseDate(lead.next_follow_up_at);
+    return !!d && d >= todayStart && d <= todayEnd;
+  });
+
+  const overdueLeads = openLeads.filter((lead) => {
+    const d = parseDate(lead.next_follow_up_at);
+    return !!d && d < todayStart;
+  });
+
+  const unassignedLeads = openLeads.filter((lead) => !lead.assigned_to);
+
+  const newLeadsToday = openLeads.filter((lead) => {
+    const d = parseDate(lead.created_at);
+    return !!d && d >= todayStart && d <= todayEnd;
+  });
+
+  const consultsThisWeek = openLeads.filter((lead) => {
+    const d = parseDate(lead.next_follow_up_at);
+    return (
+      lead.status === "consult_scheduled" &&
+      !!d &&
+      d >= todayStart &&
+      d <= weekEnd
+    );
+  });
+
+  const convertedThisMonth = leads.filter((lead) => {
+    const d = parseDate(lead.updated_at);
+    return lead.status === "converted" && !!d && d >= monthStart;
+  });
+
+  const needsAttention = [...openLeads]
+    .sort((a, b) => {
+      const pa = getPriorityRank(a, todayStart, todayEnd);
+      const pb = getPriorityRank(b, todayStart, todayEnd);
+      if (pa !== pb) return pa - pb;
+
+      const af = parseDate(a.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const bf = parseDate(b.next_follow_up_at)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      if (af !== bf) return af - bf;
+
+      return byNewest(a, b);
+    })
+    .filter((lead) => getPriorityRank(lead, todayStart, todayEnd) < 50)
+    .slice(0, 8);
+
+  const recentNewLeads = [...openLeads].sort(byNewest).slice(0, 6);
+
+  const thisWeeksConsults = [...consultsThisWeek].sort(byConsultDate).slice(0, 6);
+
+  const containerStyle: CSSProperties = {
+    minHeight: "100vh",
+    background: "#f8fafc",
+    padding: 16,
+  };
+
+  const wrapStyle: CSSProperties = {
+    width: "100%",
+    maxWidth: 1280,
+    margin: "0 auto",
+    display: "grid",
+    gap: 18,
+  };
+
+  const cardStyle: CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 24,
+    padding: 22,
+    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
+  };
+
+  const titleStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 800,
+    color: "#0f172a",
+  };
+
+  const descStyle: CSSProperties = {
+    margin: "10px 0 0 0",
+    color: "#64748b",
+    fontSize: 16,
+    lineHeight: 1.55,
+  };
+
+  const actionRowStyle: CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 18,
+  };
+
+  const primaryLinkStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
+    borderRadius: 14,
+    background: "#0f172a",
+    color: "#fff",
+    padding: "12px 18px",
+    fontSize: 15,
+    fontWeight: 800,
+  };
+
+  const secondaryLinkStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
+    borderRadius: 14,
+    background: "#fff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    padding: "12px 18px",
+    fontSize: 15,
+    fontWeight: 800,
+  };
+
+  const kpiGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 14,
+  };
+
+  const kpiCardStyle: CSSProperties = {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 20,
+    padding: 20,
+  };
+
+  const kpiLabelStyle: CSSProperties = {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: 700,
+    marginBottom: 10,
+  };
+
+  const kpiValueStyle: CSSProperties = {
+    fontSize: 42,
+    lineHeight: 1,
+    fontWeight: 900,
+    color: "#0f172a",
+  };
+
+  const sectionHeaderStyle: CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    flexWrap: "wrap",
+    marginBottom: 16,
+  };
+
+  const sectionTitleStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#0f172a",
+  };
+
+  const twoColStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1.35fr) minmax(0, 1fr)",
+    gap: 18,
+  };
+
+  const listStyle: CSSProperties = {
+    display: "grid",
+    gap: 12,
+  };
+
+  const rowCardStyle: CSSProperties = {
+    border: "1px solid #e2e8f0",
+    borderRadius: 18,
+    padding: 16,
+    background: "#fff",
+  };
+
+  const nameStyle: CSSProperties = {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#0f172a",
+  };
+
+  const metaStyle: CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+    alignItems: "center",
+  };
+
+  const smallTextStyle: CSSProperties = {
+    color: "#64748b",
+    fontSize: 14,
+    lineHeight: 1.5,
+  };
+
+  const infoGridStyle: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 10,
+    marginTop: 14,
+  };
+
+  const infoBoxStyle: CSSProperties = {
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 14,
+    padding: "10px 12px",
+  };
+
+  const infoLabelStyle: CSSProperties = {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.35,
+    marginBottom: 5,
+  };
+
+  const infoValueStyle: CSSProperties = {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#0f172a",
+    wordBreak: "break-word",
+  };
+
+  const rowActionsStyle: CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14,
+  };
+
+  const pillButtonStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textDecoration: "none",
+    borderRadius: 12,
+    background: "#fff",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    padding: "10px 12px",
+    fontSize: 14,
+    fontWeight: 800,
+  };
+
+  const emptyStyle: CSSProperties = {
+    border: "1px dashed #cbd5e1",
+    borderRadius: 18,
+    padding: 18,
+    color: "#64748b",
+    background: "#fff",
+    fontSize: 15,
+  };
 
   return (
-    <div className="space-y-7">
-       <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Active Pipeline"
-          value={activePipelineCount}
-          subtext="New through accepted"
-        />
-        <StatCard
-          label="Completed"
-          value={pipelineMap.completed.length}
-        />
-        <StatCard
-          label="Lost"
-          value={pipelineMap.lost.length}
-        />
-        <StatCard
-          label="Open Tasks"
-          value={openTasks}
-          subtext={
-            overdueTasks > 0 ? `${overdueTasks} overdue` : "No overdue tasks"
-          }
-        />
-      </section>
+    <div style={containerStyle}>
+      <div style={wrapStyle}>
+        <section style={cardStyle}>
+          <h1 style={{ ...titleStyle, fontSize: 36 }}>CRM Dashboard</h1>
+          <p style={descStyle}>
+            Welcome back, {myProfile?.full_name || "Team Member"}. Use this page to
+            identify urgent follow-ups, overdue leads, and this week’s consults
+            before jumping into the full CRM workspace.
+          </p>
 
-      <section className="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-extrabold tracking-tight text-[#0d2a66]">
-              Lead Pipeline
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Each column shows the current stage of your patient acquisition flow.
-            </p>
+          <div style={actionRowStyle}>
+            <Link href="/crm/leads/new" style={primaryLinkStyle}>
+              + New Lead
+            </Link>
+            <Link href="/crm/leads" style={secondaryLinkStyle}>
+              Open CRM Workspace
+            </Link>
+            <Link href="/crm/leads?view=followups_today" style={secondaryLinkStyle}>
+              Follow-ups Today
+            </Link>
+            <Link href="/crm/leads?view=overdue" style={secondaryLinkStyle}>
+              Overdue Leads
+            </Link>
+            <Link href="/crm/leads?view=unassigned" style={secondaryLinkStyle}>
+              Unassigned Leads
+            </Link>
           </div>
-        </div>
+        </section>
 
-        <div className="mt-6 grid gap-5 xl:grid-cols-4 2xl:grid-cols-7">
-          {PIPELINE_COLUMNS.map((column) => {
-            const items = pipelineMap[column.key];
-            const headerClass = getToneClasses(column.tone, "header");
-            const badgeClass = getToneClasses(column.tone, "badge");
-            const cardClass = getToneClasses(column.tone, "card");
+        <section style={kpiGridStyle}>
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>Follow-ups Today</div>
+            <div style={kpiValueStyle}>{followUpsToday.length}</div>
+          </div>
 
-            return (
-              <div
-                key={column.key}
-                className={`rounded-[28px] border p-4 ${cardClass}`}
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className={`text-sm font-extrabold tracking-tight ${headerClass}`}>
-                    {column.label}
-                  </h3>
-                  <span
-                    className={`inline-flex min-w-8 items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold ${badgeClass}`}
-                  >
-                    {items.length}
-                  </span>
-                </div>
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>Overdue</div>
+            <div style={kpiValueStyle}>{overdueLeads.length}</div>
+          </div>
 
-                <div className="mt-4 space-y-3">
-                  {items.length > 0 ? (
-                    items.slice(0, 6).map((lead) => (
-                      <LeadMiniCard key={lead.id} lead={lead} />
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-sm text-slate-400">
-                      No leads in this stage.
-                    </div>
-                  )}
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>Unassigned</div>
+            <div style={kpiValueStyle}>{unassignedLeads.length}</div>
+          </div>
 
-                  {items.length > 6 ? (
-                    <Link
-                      href={`/crm/leads?status=${column.key}`}
-                      className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      View {items.length - 6} more
-                    </Link>
-                  ) : null}
-                </div>
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>New Leads Today</div>
+            <div style={kpiValueStyle}>{newLeadsToday.length}</div>
+          </div>
+
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>Consults This Week</div>
+            <div style={kpiValueStyle}>{consultsThisWeek.length}</div>
+          </div>
+
+          <div style={kpiCardStyle}>
+            <div style={kpiLabelStyle}>Converted This Month</div>
+            <div style={kpiValueStyle}>{convertedThisMonth.length}</div>
+          </div>
+        </section>
+
+        <section style={twoColStyle}>
+          <div style={cardStyle}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <h2 style={sectionTitleStyle}>Needs Attention</h2>
+                <p style={{ ...descStyle, marginTop: 6, fontSize: 14 }}>
+                  Overdue first, then today’s follow-ups, then unassigned and fresh leads.
+                </p>
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <Link href="/crm/leads" style={secondaryLinkStyle}>
+                View CRM
+              </Link>
+            </div>
 
-      <section className="rounded-[32px] border border-slate-200 bg-white px-7 py-8 shadow-sm md:px-8 md:py-9">
-        <h2 className="text-3xl font-extrabold tracking-tight text-[#0d2a66]">
-          CRM Actions
-        </h2>
+            <div style={listStyle}>
+              {needsAttention.length === 0 ? (
+                <div style={emptyStyle}>No urgent leads right now.</div>
+              ) : (
+                needsAttention.map((lead) => {
+                  const followUpDate = parseDate(lead.next_follow_up_at);
+                  const isOverdue = !!followUpDate && followUpDate < todayStart;
+                  const isToday =
+                    !!followUpDate &&
+                    followUpDate >= todayStart &&
+                    followUpDate <= todayEnd;
 
-        <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <ActionCard
-            title="Leads"
-            description="View, search, filter, and manage all patient inquiries and conversion progress."
-            href="/crm/leads"
-          />
-          <ActionCard
-            title="New Lead"
-            description="Register a new patient inquiry from phone, text, walk-in, or front desk intake."
-            href="/crm/leads/new"
-          />
-          <ActionCard
-            title="Main Dashboard"
-            description="Return to the main system dashboard for cross-module summaries and navigation."
-            href="/dashboard"
-          />
-        </div>
-      </section>
+                  return (
+                    <div key={lead.id} style={rowCardStyle}>
+                      <h3 style={nameStyle}>{lead.full_name || "Unnamed Lead"}</h3>
+
+                      <div style={metaStyle}>
+                        <span style={getStatusTone(lead.status)}>
+                          {getStatusLabel(lead.status)}
+                        </span>
+
+                        {isOverdue ? (
+                          <span
+                            style={{
+                              ...getStatusTone("followup_needed"),
+                              background: "#fef2f2",
+                              color: "#b91c1c",
+                              borderColor: "#fecaca",
+                            }}
+                          >
+                            Overdue
+                          </span>
+                        ) : null}
+
+                        {isToday ? (
+                          <span
+                            style={{
+                              ...getStatusTone("contacted"),
+                              background: "#ecfeff",
+                              color: "#155e75",
+                              borderColor: "#a5f3fc",
+                            }}
+                          >
+                            Today
+                          </span>
+                        ) : null}
+
+                        {!lead.assigned_to ? (
+                          <span
+                            style={{
+                              ...getStatusTone("inactive"),
+                              background: "#fff7ed",
+                              color: "#9a3412",
+                              borderColor: "#fdba74",
+                            }}
+                          >
+                            Unassigned
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div style={infoGridStyle}>
+                        <div style={infoBoxStyle}>
+                          <div style={infoLabelStyle}>Phone</div>
+                          <div style={infoValueStyle}>{lead.phone || "-"}</div>
+                        </div>
+
+                        <div style={infoBoxStyle}>
+                          <div style={infoLabelStyle}>Interest</div>
+                          <div style={infoValueStyle}>
+                            {lead.treatment_interest || "-"}
+                          </div>
+                        </div>
+
+                        <div style={infoBoxStyle}>
+                          <div style={infoLabelStyle}>Next Follow-up</div>
+                          <div style={infoValueStyle}>
+                            {formatDateTime(lead.next_follow_up_at)}
+                          </div>
+                        </div>
+
+                        <div style={infoBoxStyle}>
+                          <div style={infoLabelStyle}>Source</div>
+                          <div style={infoValueStyle}>{lead.source || "-"}</div>
+                        </div>
+                      </div>
+
+                      <div style={rowActionsStyle}>
+                        <Link href={`/crm/leads/${lead.id}`} style={pillButtonStyle}>
+                          Open
+                        </Link>
+                        {lead.phone ? (
+                          <a href={`tel:${lead.phone}`} style={pillButtonStyle}>
+                            Call
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 18 }}>
+            <div style={cardStyle}>
+              <div style={sectionHeaderStyle}>
+                <div>
+                  <h2 style={sectionTitleStyle}>This Week’s Consults</h2>
+                  <p style={{ ...descStyle, marginTop: 6, fontSize: 14 }}>
+                    Leads currently in consult scheduled status.
+                  </p>
+                </div>
+                <Link
+                  href="/crm/leads?view=consult_scheduled"
+                  style={secondaryLinkStyle}
+                >
+                  View All
+                </Link>
+              </div>
+
+              <div style={listStyle}>
+                {thisWeeksConsults.length === 0 ? (
+                  <div style={emptyStyle}>No consults scheduled this week.</div>
+                ) : (
+                  thisWeeksConsults.map((lead) => (
+                    <div key={lead.id} style={rowCardStyle}>
+                      <h3 style={{ ...nameStyle, fontSize: 18 }}>
+                        {lead.full_name || "Unnamed Lead"}
+                      </h3>
+                      <div style={metaStyle}>
+                        <span style={getStatusTone(lead.status)}>
+                          {getStatusLabel(lead.status)}
+                        </span>
+                      </div>
+                      <div style={{ ...smallTextStyle, marginTop: 10 }}>
+                        Consult date: {formatDateTime(lead.next_follow_up_at)}
+                      </div>
+                      <div style={{ ...smallTextStyle, marginTop: 6 }}>
+                        Phone: {lead.phone || "-"}
+                      </div>
+                      <div style={rowActionsStyle}>
+                        <Link href={`/crm/leads/${lead.id}`} style={pillButtonStyle}>
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div style={cardStyle}>
+              <div style={sectionHeaderStyle}>
+                <div>
+                  <h2 style={sectionTitleStyle}>Recent New Leads</h2>
+                  <p style={{ ...descStyle, marginTop: 6, fontSize: 14 }}>
+                    Most recently created active leads.
+                  </p>
+                </div>
+                <Link href="/crm/leads?view=new" style={secondaryLinkStyle}>
+                  View All
+                </Link>
+              </div>
+
+              <div style={listStyle}>
+                {recentNewLeads.length === 0 ? (
+                  <div style={emptyStyle}>No recent leads yet.</div>
+                ) : (
+                  recentNewLeads.map((lead) => (
+                    <div key={lead.id} style={rowCardStyle}>
+                      <h3 style={{ ...nameStyle, fontSize: 18 }}>
+                        {lead.full_name || "Unnamed Lead"}
+                      </h3>
+                      <div style={metaStyle}>
+                        <span style={getStatusTone(lead.status)}>
+                          {getStatusLabel(lead.status)}
+                        </span>
+                      </div>
+                      <div style={{ ...smallTextStyle, marginTop: 10 }}>
+                        Created: {formatShortDate(lead.created_at)}
+                      </div>
+                      <div style={{ ...smallTextStyle, marginTop: 6 }}>
+                        Source: {lead.source || "-"} · Interest:{" "}
+                        {lead.treatment_interest || "-"}
+                      </div>
+                      <div style={rowActionsStyle}>
+                        <Link href={`/crm/leads/${lead.id}`} style={pillButtonStyle}>
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
