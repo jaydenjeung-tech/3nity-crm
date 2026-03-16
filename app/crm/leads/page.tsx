@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import type { CSSProperties } from "react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import TextButton from "./TextButton"; // ← 추가
 
 export const dynamic = "force-dynamic";
 
@@ -390,8 +391,8 @@ async function quickLeadAction(formData: FormData) {
   });
 
   if (activityError) {
-  console.error("Activity log failed:", activityError.message);
-}
+    console.error("Activity log failed:", activityError.message);
+  }
 
   revalidatePath("/crm");
   revalidatePath("/crm/leads");
@@ -547,259 +548,37 @@ export default async function CRMLeadsPage(props: PageProps) {
 
   const currentPath = buildViewHref(view, getParam(searchParams?.q), statusFilter, assignedFilter);
 
-  const pageStyle: CSSProperties = {
-    minHeight: "100vh",
-    background: "#f8fafc",
-    padding: 16,
-  };
-
-  const wrapStyle: CSSProperties = {
-    width: "100%",
-    maxWidth: 1280,
-    margin: "0 auto",
-    display: "grid",
-    gap: 18,
-  };
-
-  const cardStyle: CSSProperties = {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: 24,
-    padding: 22,
-    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-  };
-
-  const headerTitleStyle: CSSProperties = {
-    margin: 0,
-    fontSize: 34,
-    fontWeight: 900,
-    color: "#0f172a",
-  };
-
-  const descStyle: CSSProperties = {
-    margin: "10px 0 0 0",
-    color: "#64748b",
-    fontSize: 15,
-    lineHeight: 1.6,
-  };
-
-  const topActionsStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 12,
-    marginTop: 18,
-  };
-
-  const primaryLinkStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    borderRadius: 14,
-    background: "#0f172a",
-    color: "#fff",
-    padding: "12px 18px",
-    fontSize: 15,
-    fontWeight: 800,
-  };
-
-  const secondaryLinkStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    borderRadius: 14,
-    background: "#fff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    padding: "12px 18px",
-    fontSize: 15,
-    fontWeight: 800,
-  };
-
-  const filtersGridStyle: CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  };
-
-  const fieldStyle: CSSProperties = {
-    display: "grid",
-    gap: 8,
-  };
-
-  const labelStyle: CSSProperties = {
-    fontSize: 13,
-    fontWeight: 800,
-    color: "#0f172a",
-  };
-
-  const inputStyle: CSSProperties = {
-    width: "100%",
-    boxSizing: "border-box",
-    padding: "12px 14px",
-    borderRadius: 12,
-    border: "1px solid #cbd5e1",
-    background: "#fff",
-    fontSize: 15,
-    color: "#0f172a",
-  };
-
-  const formActionsStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 16,
-  };
-
-  const tabsWrapStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  };
-
-  const listStyle: CSSProperties = {
-    display: "grid",
-    gap: 14,
-  };
-
-  const rowCardStyle: CSSProperties = {
-    border: "1px solid #e2e8f0",
-    borderRadius: 20,
-    padding: 18,
-    background: "#fff",
-  };
-
-  const rowHeaderStyle: CSSProperties = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 12,
-    flexWrap: "wrap",
-  };
-
-  const nameStyle: CSSProperties = {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#0f172a",
-  };
-
-  const metaStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 10,
-    alignItems: "center",
-  };
-
-  const infoGridStyle: CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 10,
-    marginTop: 14,
-  };
-
-  const infoBoxStyle: CSSProperties = {
-    background: "#f8fafc",
-    border: "1px solid #e2e8f0",
-    borderRadius: 14,
-    padding: "10px 12px",
-  };
-
-  const infoLabelStyle: CSSProperties = {
-    fontSize: 12,
-    fontWeight: 700,
-    color: "#64748b",
-    textTransform: "uppercase",
-    letterSpacing: 0.35,
-    marginBottom: 5,
-  };
-
-  const infoValueStyle: CSSProperties = {
-    fontSize: 14,
-    fontWeight: 700,
-    color: "#0f172a",
-    wordBreak: "break-word",
-  };
-
-  const smallTextStyle: CSSProperties = {
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 1.6,
-  };
-
-  const rowActionsStyle: CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
-  };
-
-  const pillButtonStyle: CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    borderRadius: 12,
-    background: "#fff",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    padding: "10px 12px",
-    fontSize: 14,
-    fontWeight: 800,
-  };
-
-  const quickBtnStyle: CSSProperties = {
-    appearance: "none",
-    border: "1px solid #cbd5e1",
-    borderRadius: 12,
-    background: "#fff",
-    color: "#0f172a",
-    padding: "10px 12px",
-    fontSize: 13,
-    fontWeight: 800,
-    cursor: "pointer",
-  };
-
-  const emptyStyle: CSSProperties = {
-    border: "1px dashed #cbd5e1",
-    borderRadius: 18,
-    padding: 18,
-    color: "#64748b",
-    background: "#fff",
-    fontSize: 15,
-  };
-
-  const sectionHeaderStyle: CSSProperties = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-    marginBottom: 16,
-  };
-
-  const sectionTitleStyle: CSSProperties = {
-    margin: 0,
-    fontSize: 22,
-    fontWeight: 900,
-    color: "#0f172a",
-  };
-
-  const activeTabStyle = (active: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    textDecoration: "none",
-    borderRadius: 999,
-    padding: "10px 14px",
-    fontSize: 14,
-    fontWeight: 800,
-    border: active ? "1px solid #0f172a" : "1px solid #cbd5e1",
-    background: active ? "#0f172a" : "#fff",
-    color: active ? "#fff" : "#0f172a",
-  });
+  const pageStyle: CSSProperties = { minHeight: "100vh", background: "#f8fafc", padding: 16 };
+  const wrapStyle: CSSProperties = { width: "100%", maxWidth: 1280, margin: "0 auto", display: "grid", gap: 18 };
+  const cardStyle: CSSProperties = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 24, padding: 22, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" };
+  const headerTitleStyle: CSSProperties = { margin: 0, fontSize: 34, fontWeight: 900, color: "#0f172a" };
+  const descStyle: CSSProperties = { margin: "10px 0 0 0", color: "#64748b", fontSize: 15, lineHeight: 1.6 };
+  const topActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 12, marginTop: 18 };
+  const primaryLinkStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: 14, background: "#0f172a", color: "#fff", padding: "12px 18px", fontSize: 15, fontWeight: 800 };
+  const secondaryLinkStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: 14, background: "#fff", color: "#0f172a", border: "1px solid #cbd5e1", padding: "12px 18px", fontSize: 15, fontWeight: 800 };
+  const filtersGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 };
+  const fieldStyle: CSSProperties = { display: "grid", gap: 8 };
+  const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 800, color: "#0f172a" };
+  const inputStyle: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 12, border: "1px solid #cbd5e1", background: "#fff", fontSize: 15, color: "#0f172a" };
+  const formActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 16 };
+  const tabsWrapStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10 };
+  const listStyle: CSSProperties = { display: "grid", gap: 14 };
+  const rowCardStyle: CSSProperties = { border: "1px solid #e2e8f0", borderRadius: 20, padding: 18, background: "#fff" };
+  const rowHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" };
+  const nameStyle: CSSProperties = { margin: 0, fontSize: 22, fontWeight: 900, color: "#0f172a" };
+  const metaStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, alignItems: "center" };
+  const infoGridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 14 };
+  const infoBoxStyle: CSSProperties = { background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "10px 12px" };
+  const infoLabelStyle: CSSProperties = { fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.35, marginBottom: 5 };
+  const infoValueStyle: CSSProperties = { fontSize: 14, fontWeight: 700, color: "#0f172a", wordBreak: "break-word" };
+  const smallTextStyle: CSSProperties = { color: "#64748b", fontSize: 14, lineHeight: 1.6 };
+  const rowActionsStyle: CSSProperties = { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 };
+  const pillButtonStyle: CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: 12, background: "#fff", color: "#0f172a", border: "1px solid #cbd5e1", padding: "10px 12px", fontSize: 14, fontWeight: 800 };
+  const quickBtnStyle: CSSProperties = { appearance: "none", border: "1px solid #cbd5e1", borderRadius: 12, background: "#fff", color: "#0f172a", padding: "10px 12px", fontSize: 13, fontWeight: 800, cursor: "pointer" };
+  const emptyStyle: CSSProperties = { border: "1px dashed #cbd5e1", borderRadius: 18, padding: 18, color: "#64748b", background: "#fff", fontSize: 15 };
+  const sectionHeaderStyle: CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 };
+  const sectionTitleStyle: CSSProperties = { margin: 0, fontSize: 22, fontWeight: 900, color: "#0f172a" };
+  const activeTabStyle = (active: boolean): CSSProperties => ({ display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none", borderRadius: 999, padding: "10px 14px", fontSize: 14, fontWeight: 800, border: active ? "1px solid #0f172a" : "1px solid #cbd5e1", background: active ? "#0f172a" : "#fff", color: active ? "#fff" : "#0f172a" });
 
   return (
     <div style={pageStyle}>
@@ -811,14 +590,9 @@ export default async function CRMLeadsPage(props: PageProps) {
             leads here. Use the dashboard for priority, and use this page for the
             actual daily follow-up work.
           </p>
-
           <div style={topActionsStyle}>
-            <Link href="/crm" style={secondaryLinkStyle}>
-              ← Back to Dashboard
-            </Link>
-            <Link href="/crm/leads/new" style={primaryLinkStyle}>
-              + New Lead
-            </Link>
+            <Link href="/crm" style={secondaryLinkStyle}>← Back to Dashboard</Link>
+            <Link href="/crm/leads/new" style={primaryLinkStyle}>+ New Lead</Link>
           </div>
         </section>
 
@@ -831,62 +605,16 @@ export default async function CRMLeadsPage(props: PageProps) {
               </p>
             </div>
           </div>
-
           <div style={tabsWrapStyle}>
-            <Link
-              href={buildViewHref("all", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "all")}
-            >
-              All ({counts.all})
-            </Link>
-            <Link
-              href={buildViewHref("followups_today", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "followups_today")}
-            >
-              Follow-ups Today ({counts.followUpsToday})
-            </Link>
-            <Link
-              href={buildViewHref("overdue", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "overdue")}
-            >
-              Overdue ({counts.overdue})
-            </Link>
-            <Link
-              href={buildViewHref("unassigned", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "unassigned")}
-            >
-              Unassigned ({counts.unassigned})
-            </Link>
-            <Link
-              href={buildViewHref("new", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "new")}
-            >
-              New Leads ({counts.newLeads})
-            </Link>
-            <Link
-              href={buildViewHref("consult_scheduled", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "consult_scheduled")}
-            >
-              Consult Scheduled ({counts.consultScheduled})
-            </Link>
-            <Link
-              href={buildViewHref("treatment_plan", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "treatment_plan")}
-            >
-              Treatment Plan ({counts.treatmentPlan})
-            </Link>
-            <Link
-              href={buildViewHref("converted", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "converted")}
-            >
-              Converted ({counts.converted})
-            </Link>
-            <Link
-              href={buildViewHref("lost", q, statusFilter, assignedFilter)}
-              style={activeTabStyle(view === "lost")}
-            >
-              Lost ({counts.lost})
-            </Link>
+            <Link href={buildViewHref("all", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "all")}>All ({counts.all})</Link>
+            <Link href={buildViewHref("followups_today", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "followups_today")}>Follow-ups Today ({counts.followUpsToday})</Link>
+            <Link href={buildViewHref("overdue", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "overdue")}>Overdue ({counts.overdue})</Link>
+            <Link href={buildViewHref("unassigned", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "unassigned")}>Unassigned ({counts.unassigned})</Link>
+            <Link href={buildViewHref("new", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "new")}>New Leads ({counts.newLeads})</Link>
+            <Link href={buildViewHref("consult_scheduled", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "consult_scheduled")}>Consult Scheduled ({counts.consultScheduled})</Link>
+            <Link href={buildViewHref("treatment_plan", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "treatment_plan")}>Treatment Plan ({counts.treatmentPlan})</Link>
+            <Link href={buildViewHref("converted", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "converted")}>Converted ({counts.converted})</Link>
+            <Link href={buildViewHref("lost", q, statusFilter, assignedFilter)} style={activeTabStyle(view === "lost")}>Lost ({counts.lost})</Link>
           </div>
         </section>
 
@@ -899,74 +627,36 @@ export default async function CRMLeadsPage(props: PageProps) {
               </p>
             </div>
           </div>
-
           <form method="get">
             <input type="hidden" name="view" value={view} />
-
             <div style={filtersGridStyle}>
               <div style={fieldStyle}>
-                <label htmlFor="q" style={labelStyle}>
-                  Search
-                </label>
-                <input
-                  id="q"
-                  name="q"
-                  defaultValue={getParam(searchParams?.q)}
-                  placeholder="Name, phone, email, source..."
-                  style={inputStyle}
-                />
+                <label htmlFor="q" style={labelStyle}>Search</label>
+                <input id="q" name="q" defaultValue={getParam(searchParams?.q)} placeholder="Name, phone, email, source..." style={inputStyle} />
               </div>
-
               <div style={fieldStyle}>
-                <label htmlFor="status" style={labelStyle}>
-                  Status
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={statusFilter}
-                  style={inputStyle}
-                >
+                <label htmlFor="status" style={labelStyle}>Status</label>
+                <select id="status" name="status" defaultValue={statusFilter} style={inputStyle}>
                   <option value="">All statuses</option>
                   {STATUS_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>
-
               <div style={fieldStyle}>
-                <label htmlFor="assigned" style={labelStyle}>
-                  Assigned To
-                </label>
-                <select
-                  id="assigned"
-                  name="assigned"
-                  defaultValue={assignedFilter}
-                  style={inputStyle}
-                >
+                <label htmlFor="assigned" style={labelStyle}>Assigned To</label>
+                <select id="assigned" name="assigned" defaultValue={assignedFilter} style={inputStyle}>
                   <option value="">All staff</option>
                   <option value="unassigned">Unassigned</option>
                   {staff.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.full_name || member.role || member.id}
-                    </option>
+                    <option key={member.id} value={member.id}>{member.full_name || member.role || member.id}</option>
                   ))}
                 </select>
               </div>
             </div>
-
             <div style={formActionsStyle}>
-              <button type="submit" style={primaryLinkStyle}>
-                Apply Filters
-              </button>
-              <Link
-                href={view === "all" ? "/crm/leads" : `/crm/leads?view=${view}`}
-                style={secondaryLinkStyle}
-              >
-                Reset Filters
-              </Link>
+              <button type="submit" style={primaryLinkStyle}>Apply Filters</button>
+              <Link href={view === "all" ? "/crm/leads" : `/crm/leads?view=${view}`} style={secondaryLinkStyle}>Reset Filters</Link>
             </div>
           </form>
         </section>
@@ -987,140 +677,49 @@ export default async function CRMLeadsPage(props: PageProps) {
             ) : (
               filtered.map((lead) => {
                 const followUp = parseDate(lead.next_follow_up_at);
-                const isOverdue =
-                  !isClosedStatus(lead.status) && !!followUp && followUp < todayStart;
-                const isToday =
-                  !isClosedStatus(lead.status) &&
-                  !!followUp &&
-                  followUp >= todayStart &&
-                  followUp <= todayEnd;
-
-                const assignedName = lead.assigned_to
-                  ? staffMap.get(lead.assigned_to) || lead.assigned_to
-                  : "Unassigned";
+                const isOverdue = !isClosedStatus(lead.status) && !!followUp && followUp < todayStart;
+                const isToday = !isClosedStatus(lead.status) && !!followUp && followUp >= todayStart && followUp <= todayEnd;
+                const assignedName = lead.assigned_to ? staffMap.get(lead.assigned_to) || lead.assigned_to : "Unassigned";
 
                 return (
                   <div key={lead.id} style={rowCardStyle}>
                     <div style={rowHeaderStyle}>
                       <div>
                         <h3 style={nameStyle}>{lead.full_name || "Unnamed Lead"}</h3>
-
                         <div style={metaStyle}>
-                          <span style={getStatusTone(lead.status)}>
-                            {getStatusLabel(lead.status)}
-                          </span>
-
-                          {isOverdue ? (
-                            <span
-                              style={{
-                                ...getStatusTone("followup_needed"),
-                                background: "#fef2f2",
-                                color: "#b91c1c",
-                                borderColor: "#fecaca",
-                              }}
-                            >
-                              Overdue
-                            </span>
-                          ) : null}
-
-                          {isToday ? (
-                            <span
-                              style={{
-                                ...getStatusTone("contacted"),
-                                background: "#ecfeff",
-                                color: "#155e75",
-                                borderColor: "#a5f3fc",
-                              }}
-                            >
-                              Follow-up Today
-                            </span>
-                          ) : null}
-
-                          {!lead.assigned_to && !isClosedStatus(lead.status) ? (
-                            <span
-                              style={{
-                                ...getStatusTone("inactive"),
-                                background: "#fff7ed",
-                                color: "#9a3412",
-                                borderColor: "#fdba74",
-                              }}
-                            >
-                              Unassigned
-                            </span>
-                          ) : null}
-
-                          {lead.is_active === false ? (
-                            <span style={getStatusTone("inactive")}>Inactive</span>
-                          ) : null}
+                          <span style={getStatusTone(lead.status)}>{getStatusLabel(lead.status)}</span>
+                          {isOverdue ? <span style={{ ...getStatusTone("followup_needed"), background: "#fef2f2", color: "#b91c1c", borderColor: "#fecaca" }}>Overdue</span> : null}
+                          {isToday ? <span style={{ ...getStatusTone("contacted"), background: "#ecfeff", color: "#155e75", borderColor: "#a5f3fc" }}>Follow-up Today</span> : null}
+                          {!lead.assigned_to && !isClosedStatus(lead.status) ? <span style={{ ...getStatusTone("inactive"), background: "#fff7ed", color: "#9a3412", borderColor: "#fdba74" }}>Unassigned</span> : null}
+                          {lead.is_active === false ? <span style={getStatusTone("inactive")}>Inactive</span> : null}
                         </div>
                       </div>
                     </div>
 
                     <div style={infoGridStyle}>
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Phone</div>
-                        <div style={infoValueStyle}>{lead.phone || "-"}</div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Email</div>
-                        <div style={infoValueStyle}>{lead.email || "-"}</div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Interest</div>
-                        <div style={infoValueStyle}>
-                          {lead.treatment_interest || "-"}
-                        </div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Assigned To</div>
-                        <div style={infoValueStyle}>{assignedName}</div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Last Contacted</div>
-                        <div style={infoValueStyle}>
-                          {formatDateTime(lead.last_contacted_at)}
-                        </div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Next Follow-up</div>
-                        <div style={infoValueStyle}>
-                          {formatDateTime(lead.next_follow_up_at)}
-                        </div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Source</div>
-                        <div style={infoValueStyle}>{lead.source || "-"}</div>
-                      </div>
-
-                      <div style={infoBoxStyle}>
-                        <div style={infoLabelStyle}>Created</div>
-                        <div style={infoValueStyle}>
-                          {formatShortDate(lead.created_at)}
-                        </div>
-                      </div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Phone</div><div style={infoValueStyle}>{lead.phone || "-"}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Email</div><div style={infoValueStyle}>{lead.email || "-"}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Interest</div><div style={infoValueStyle}>{lead.treatment_interest || "-"}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Assigned To</div><div style={infoValueStyle}>{assignedName}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Last Contacted</div><div style={infoValueStyle}>{formatDateTime(lead.last_contacted_at)}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Next Follow-up</div><div style={infoValueStyle}>{formatDateTime(lead.next_follow_up_at)}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Source</div><div style={infoValueStyle}>{lead.source || "-"}</div></div>
+                      <div style={infoBoxStyle}><div style={infoLabelStyle}>Created</div><div style={infoValueStyle}>{formatShortDate(lead.created_at)}</div></div>
                     </div>
 
-                    {lead.notes ? (
-                      <div style={{ ...smallTextStyle, marginTop: 12 }}>
-                        Notes: {lead.notes}
-                      </div>
-                    ) : null}
+                    {lead.notes ? <div style={{ ...smallTextStyle, marginTop: 12 }}>Notes: {lead.notes}</div> : null}
 
                     <div style={rowActionsStyle}>
-                      <Link href={`/crm/leads/${lead.id}`} style={pillButtonStyle}>
-                        Open
-                      </Link>
+                      <Link href={`/crm/leads/${lead.id}`} style={pillButtonStyle}>Open</Link>
 
+                      {/* ↓ 변경된 부분: Call + Text 버튼 */}
                       {lead.phone ? (
-                        <a href={`tel:${lead.phone}`} style={pillButtonStyle}>
-                          Call
-                        </a>
+                        <>
+                          <a href={`tel:${lead.phone}`} style={pillButtonStyle}>
+                            📞 Call
+                          </a>
+                          <TextButton phone={lead.phone} />
+                        </>
                       ) : null}
 
                       {!isClosedStatus(lead.status) ? (
@@ -1129,46 +728,32 @@ export default async function CRMLeadsPage(props: PageProps) {
                             <input type="hidden" name="lead_id" value={lead.id} />
                             <input type="hidden" name="quick_action" value="mark_contacted" />
                             <input type="hidden" name="return_to" value={currentPath} />
-                            <button type="submit" style={quickBtnStyle}>
-                              Mark Contacted
-                            </button>
+                            <button type="submit" style={quickBtnStyle}>Mark Contacted</button>
                           </form>
-
                           <form action={quickLeadAction}>
                             <input type="hidden" name="lead_id" value={lead.id} />
                             <input type="hidden" name="quick_action" value="followup_tomorrow" />
                             <input type="hidden" name="return_to" value={currentPath} />
-                            <button type="submit" style={quickBtnStyle}>
-                              Follow-up Tomorrow
-                            </button>
+                            <button type="submit" style={quickBtnStyle}>Follow-up Tomorrow</button>
                           </form>
-
                           <form action={quickLeadAction}>
                             <input type="hidden" name="lead_id" value={lead.id} />
                             <input type="hidden" name="quick_action" value="followup_next_week" />
                             <input type="hidden" name="return_to" value={currentPath} />
-                            <button type="submit" style={quickBtnStyle}>
-                              Follow-up Next Week
-                            </button>
+                            <button type="submit" style={quickBtnStyle}>Follow-up Next Week</button>
                           </form>
-
                           <form action={quickLeadAction}>
                             <input type="hidden" name="lead_id" value={lead.id} />
                             <input type="hidden" name="quick_action" value="mark_followup_needed" />
                             <input type="hidden" name="return_to" value={currentPath} />
-                            <button type="submit" style={quickBtnStyle}>
-                              Mark Follow-up Needed
-                            </button>
+                            <button type="submit" style={quickBtnStyle}>Mark Follow-up Needed</button>
                           </form>
-
                           {lead.assigned_to ? (
                             <form action={quickLeadAction}>
                               <input type="hidden" name="lead_id" value={lead.id} />
                               <input type="hidden" name="quick_action" value="unassign" />
                               <input type="hidden" name="return_to" value={currentPath} />
-                              <button type="submit" style={quickBtnStyle}>
-                                Unassign
-                              </button>
+                              <button type="submit" style={quickBtnStyle}>Unassign</button>
                             </form>
                           ) : null}
                         </>
